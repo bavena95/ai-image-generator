@@ -1,0 +1,104 @@
+Resumo Técnico: AI Image Generator (Projeto em Desenvolvimento)
+Última Atualização do Resumo: 14 de maio de 2025
+
+1. Visão Geral e Objetivos
+O projeto visa criar uma aplicação web para geração de imagens personalizadas via prompts de texto, utilizando IA (provavelmente DALL-E ou similar). As funcionalidades incluem autenticação de usuários, um sistema de créditos para uso, diferentes modos criativos para geração, e uma interface para visualização e gerenciamento das imagens criadas. A monetização é planejada através da venda de créditos.
+
+2. Tecnologias Principais
+Frontend: Next.js (com App Router), React, TypeScript.
+Estilização: Tailwind CSS, Shadcn UI (para componentes de UI pré-construídos e estilizáveis).
+Backend & Base de Dados: Supabase (Autenticação, Base de Dados PostgreSQL, Storage para imagens).
+Geração de Imagem AI: API da OpenAI (não totalmente integrada).
+Pagamentos: Stripe (Checkout e Webhooks para gestão de créditos, não totalmente integrada).
+Animação: Framer Motion.
+3. Estrutura do Projeto (Baseada no App Router do Next.js)
+app/: Diretório principal para rotas e lógica da aplicação.
+
+layout.tsx: Layout raiz, envolve todas as páginas. Responsável por prover o AuthProvider globalmente e renderizar o Toaster para notificações.
+page.tsx: Página principal (home), onde ocorre a interação primária de geração de imagem. Inclui seleção de modos criativos, input de prompt, e exibição de resultados.
+profile/page.tsx: Página de perfil do usuário, com abas para edição de dados, galeria de imagens e compra/gerenciamento de créditos.
+api/: Contém as API Routes do Next.js para:
+generate/route.ts: Lógica para receber o prompt, verificar autenticação e créditos, chamar a API da OpenAI, fazer upload da imagem para o Supabase Storage, salvar metadados na DB e debitar créditos.
+checkout/route.ts: Criação de sessões de checkout do Stripe.
+webhooks/stripe/route.ts: Manipulação de eventos do Stripe (ex: checkout.session.completed, invoice.payment_succeeded) para atualizar créditos do usuário no Supabase.
+auth/actions.ts: Server Actions para login (signInWithPassword), signup (signUp), e logout (signOut) usando Supabase Auth.
+context/AuthContext.tsx: Um Contexto React (AuthProvider e useAuth) para gerenciamento global do estado de autenticação do usuário (objeto user, credits, estado de isLoading) e funções relacionadas à autenticação (abrir modais de login/registro, logout, refresh de créditos). Este foi um ponto focal recente de depuração.
+components/: Componentes reutilizáveis da UI.
+
+auth/: Componentes para autenticação, como login-form.tsx, register-form.tsx, login-modal.tsx, register-modal.tsx. Os formulários usam Server Actions.
+profile/: Componentes para a página de perfil, como profile-form.tsx (para editar dados do usuário) e image-gallery.tsx.
+ui/: Componentes da biblioteca Shadcn UI (Button, Card, Input, Tabs, etc.).
+Outros componentes específicos da aplicação como mode-card.tsx, image-canvas.tsx, aspect-ratio-selector.tsx.
+lib/: Utilitários e configuração.
+
+utils.ts: Funções utilitárias, como cn para classnames.
+supabase/client.ts: Configuração do cliente Supabase para o lado do cliente (browser).
+supabase/server.ts: Configuração do cliente Supabase para o lado do servidor (Server Components, API Routes, Server Actions).
+middleware.ts: Middleware do Next.js para gerenciar a sessão do usuário com Supabase a cada requisição, usando @supabase/ssr.
+
+4. Funcionalidades Principais e Estado Atual
+Autenticação (Supabase):
+
+Implementada usando o cliente Supabase (@supabase/ssr) e Server Actions.
+Fluxo de login, registro e logout funcional.
+Modais para login/registro na UI.
+O estado global de autenticação (usuário, créditos, loading) é gerenciado pelo AuthContext em app/context/AuthContext.tsx.
+Desafio Recente: Garantir que o useEffect dentro do AuthProvider execute corretamente para inicializar o estado de autenticação e definir isLoading para false, especialmente ao acessar páginas protegidas diretamente. Isso parece ter sido resolvido, com o useEffect agora disparando e chamadas como getSession() funcionando.
+Gestão de Perfil:
+
+Página /profile com abas.
+O ProfileForm (components/profile/profile-form.tsx) é responsável por permitir ao usuário atualizar dados como nome, username, bio, website e avatar.
+Os dados do perfil são/serão armazenados tanto no user_metadata do Supabase Auth quanto na tabela profiles do Supabase DB.
+Upload de avatar para o Supabase Storage (bucket avatars).
+Desafio Atual/Próximo Passo: Garantir que o ProfileForm leia corretamente os dados existentes do user_metadata e/ou da tabela profiles e salve as atualizações nos locais corretos, especialmente lidando com colunas que podem ou não existir na tabela profiles (como bio, website_url, avatar_url).
+Geração de Imagens (OpenAI):
+
+API Route (/api/generate) estruturada para o fluxo.
+Verificação de créditos antes da geração.
+Upload da imagem gerada para o Supabase Storage (bucket generated_images).
+Registro de metadados da imagem na tabela images.
+Débito de créditos do usuário.
+Estado: A integração final com a API da OpenAI e o fluxo completo precisam ser finalizados e testados.
+Sistema de Créditos e Pagamentos (Stripe):
+
+Tabela profiles no Supabase armazena os créditos do usuário.
+API Route (/api/checkout) para criar sessões de pagamento do Stripe.
+API Route (/api/webhooks/stripe) para receber eventos do Stripe e atualizar os créditos.
+Interface na página de perfil para o usuário comprar créditos (planos avulsos e assinaturas).
+Estado: A integração final com o Stripe precisa ser finalizada e testada. Os Price IDs no código são placeholders.
+Interface do Usuário:
+
+Página principal (app/page.tsx) com layout para seleção de modos, input de prompt, configurações (aspect ratio, qualidade, etc.) e exibição de resultados/galeria.
+Uso de componentes Shadcn UI e Tailwind CSS para estilização.
+Modo claro/escuro implementado com ThemeProvider.
+Componente AspectRatioSelector customizado.
+Desafios Anteriores: Problemas de layout (scrolls indesejados) foram abordados.
+5. Estrutura da Base de Dados Supabase (Principais Tabelas)
+auth.users: Gerenciada pelo Supabase Auth. Contém id, email, user_metadata (onde podemos armazenar avatar_url, full_name, user_name, bio, website).
+profiles:
+id (UUID, FK para auth.users.id)
+credits (INTEGER)
+stripe_customer_id (TEXT)
+updated_at (TIMESTAMPTZ)
+Colunas Adicionais (a serem confirmadas/adicionadas): username (TEXT), full_name (TEXT), bio (TEXT), website_url (TEXT), avatar_url (TEXT). A ausência ou nomes incorretos dessas colunas causaram erros recentes.
+Trigger handle_new_user para criar uma entrada em profiles quando um novo usuário se registra em auth.users.
+images:
+id (BIGINT, PK)
+user_id (UUID, FK para profiles.id)
+prompt (TEXT)
+image_url (TEXT, caminho no Supabase Storage)
+Outros metadados (modelo, parâmetros).
+Row Level Security (RLS): Habilitada e configurada para as tabelas e para os buckets do Storage (generated_images, avatars) para garantir que os usuários só acessem seus próprios dados.
+6. Pontos Críticos de Desenvolvimento e Depuração Recentes
+Inicialização do AuthContext: Garantir que o useEffect principal no AuthProvider execute corretamente para buscar a sessão do Supabase e definir o estado isLoading para false. Isso foi um grande foco, e a causa raiz parecia ser erros sutis de importação ou a lógica interna do useEffect impedindo sua conclusão. Atualmente, parece estar funcionando.
+Consistência dos Nomes de Colunas: Divergências entre os nomes das colunas esperados no código (ex: no select() do Supabase ou no form.reset()) e os nomes reais das colunas na tabela profiles causaram erros. É crucial alinhar isso.
+Tratamento de Colunas Faltantes: Desenvolver uma estratégia para ProfileForm lidar com campos de perfil cujas colunas podem não existir ainda na tabela profiles, utilizando user_metadata como fallback ou destino principal para esses campos.
+Redundâncias e Organização: O objetivo inicial de refatorar para remover código duplicado (ex: múltiplas lógicas de autenticação, abas duplicadas) foi parcialmente alcançado com a introdução do AuthContext e a simplificação do ProfileForm.
+7. Próximos Passos Imediatos (Inferidos da Conversa)
+Finalizar ProfileForm.tsx:
+Garantir que ele leia/escreva corretamente nas colunas existentes da tabela profiles.
+Utilizar user_metadata para campos que não têm colunas correspondentes em profiles (como bio, se a coluna não for adicionada).
+Testar o upload e a exibição do avatar.
+Restaurar a UI Completa da app/profile/page.tsx: Reintroduzir as seções de galeria de imagens e o formulário de perfil funcional.
+Implementar ImageGallery.tsx: Fazer com que busque e exiba as imagens do usuário logado.
+Continuar a integração e teste das funcionalidades de geração de imagem (OpenAI) e pagamentos (Stripe) na app/page.tsx e nas API routes.
